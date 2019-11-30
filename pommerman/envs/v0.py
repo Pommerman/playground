@@ -147,7 +147,7 @@ class Pomme(gym.Env):
 
     def _get_rewards(self):
         return self.model.get_rewards(self._agents, self._game_type,
-                                      self._step_count, self._max_steps)
+                                      self._step_count, self._max_steps, self._bombs)
 
     def _get_done(self):
         return self.model.get_done(self._agents, self._step_count,

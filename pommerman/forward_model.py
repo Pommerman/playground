@@ -63,7 +63,7 @@ class ForwardModel(object):
                 actions, board, agents, bombs, items, flames)
             next_obs = self.get_observations(
                 board, agents, bombs, is_partially_observable, agent_view_size)
-            reward = self.get_rewards(agents, game_type, step_count, max_steps)
+            reward = self.get_rewards(agents, game_type, step_count, max_steps, bombs)
             done = self.get_done(agents, game_type, step_count, max_steps,
                                  training_agent)
             info = self.get_info(done, rewards, game_type, agents)
@@ -438,6 +438,10 @@ class ForwardModel(object):
                 bomb.fire()
                 has_new_explosions = True
 
+        agent_positions = []
+        for num_agent, agent in enumerate(alive_agents):
+            agent_positions.append(agent.position)
+
         # Chain the explosions.
         while has_new_explosions:
             next_bombs = []
@@ -448,6 +452,7 @@ class ForwardModel(object):
                     continue
 
                 bomb.bomber.incr_ammo()
+                pos = bomb.position
                 for _, indices in bomb.explode().items():
                     for r, c in indices:
                         if not all(
@@ -456,7 +461,13 @@ class ForwardModel(object):
                         if curr_board[r][c] == constants.Item.Rigid.value:
                             break
                         exploded_map[r][c] = 1
+
+                        # Need better way to store bomb and detect training agent
+                        # if (r,c) in agent_positions:
+                            # bomb.reward += 0.75 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
                         if curr_board[r][c] == constants.Item.Wood.value:
+                            # Better way to store reward
+                            # bomb.reward += 0.75 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
                             break
 
             curr_bombs = next_bombs
@@ -627,24 +638,68 @@ class ForwardModel(object):
             }
 
     @staticmethod
-    def get_rewards(agents, game_type, step_count, max_steps):
+    def get_rewards(agents, game_type, step_count, max_steps, bombs=None):
 
         def any_lst_equal(lst, values):
             '''Checks if list are equal'''
             return any([lst == v for v in values])
 
+        def get_dangerzone(bombs):
+            # Need to check if out of gameBoard
+            danger_positions = []
+            for bomb in bombs:
+                # Pwer ups
+                positions = [bomb.position]
+                for i in range(1, bomb.blast_strength):
+                    n = (bomb.position[0], bomb.position[1] + i)
+                    s = (bomb.position[0], bomb.position[1] - i)
+                    w = (bomb.position[0] - i, bomb.position[1])
+                    e = (bomb.position[0] + i, bomb.position[1])
+                    positions.append(n)
+                    positions.append(s)
+                    positions.append(w)
+                    positions.append(e)
+                for position in positions:
+                    # < 0 or > 10 (being edges of board, remove them)
+                    if position[0] < 0 or position[1] < 0 or position[0] > 10 or position[1] > 10: positions.remove(position)
+                first_list = set(danger_positions)
+                second_list = set(positions)
+                dif = first_list - second_list
+                danger_positions += list(dif)
+            return danger_positions
+
+        def safety_check(danger_zone, agent_position):
+            for pos in danger_zone:
+                if agent_position == pos: return False
+            return True
+
         alive_agents = [num for num, agent in enumerate(agents) \
                         if agent.is_alive]
         if game_type == constants.GameType.FFA:
-            if len(alive_agents) == 1:
-                # An agent won. Give them +1, others -1.
-                return [2 * int(agent.is_alive) - 1 for agent in agents]
-            elif step_count >= max_steps:
-                # Game is over from time. Everyone gets -1.
-                return [-1] * 4
+           # An agent won. Give them +1, others -1.
+            if len(alive_agents) == 1: return [2 * int(agent.is_alive) - 1 for agent in agents]
+            # Game is over from time. Everyone gets -1.
+            elif step_count >= max_steps: return [-1] * 4
             else:
                 # Game running: 0 for alive, -1 for dead.
-                return [int(agent.is_alive) - 1 for agent in agents]
+                rewards, index = 0,0
+                trainable_agent = agents[0]
+                for i in range(len(agents)):
+                    if agents[i].__class__.__name__ == "TrainingAgent": 
+                        trainable_agent = agents[i]
+                        index = i
+                if bombs:
+                    neg_positions = get_dangerzone(bombs)
+                    if safety_check(neg_positions, trainable_agent.position): rewards += 0.025
+                    else: rewards -= 0.025
+                    for bomb in bombs:
+                        if bomb.bomber.agent_id == trainable_agent.agent_id: 
+                            rewards += 0.025 
+
+                tmp = [int(agent.is_alive) - 1 for agent in agents]
+                tmp[index] += rewards
+                return tmp
+
         elif game_type == constants.GameType.OneVsOne:
             if len(alive_agents) == 1:
                 # An agent won. Give them +1, the other -1.
