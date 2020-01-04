@@ -9,14 +9,25 @@ from . import utility
 class Bomber(object):
     """Container to keep the agent state."""
 
-    def __init__(self, agent_id=None, game_type=None):
+    def __init__(self, agent_id=None, game_type=None, reward=0):
         self._game_type = game_type
         self.ammo = 1
+        self.reward = reward
+        self.visited = set()
         self.is_alive = True
         self.blast_strength = constants.DEFAULT_BLAST_STRENGTH
         self.can_kick = False
         if agent_id is not None:
             self.set_agent_id(agent_id)
+
+    def get_position_reward(self):
+        cell = tuple(self.position)
+        if cell not in self.visited:
+            self.visited.add(cell)
+            return 0.002
+
+        return 0.08 * (len(self.visited )/ 121)
+
 
     def set_agent_id(self, agent_id):
         self.agent_id = agent_id

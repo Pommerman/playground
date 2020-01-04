@@ -422,6 +422,7 @@ class ForwardModel(object):
             if desired_agent_positions[num_agent] != agent.position:
                 agent.move(actions[agent.agent_id])
                 if utility.position_is_powerup(curr_board, agent.position):
+                    # if agent.agent_id == 0: agent.reward += 0.0005
                     agent.pick_up(
                         constants.Item(curr_board[agent.position]),
                         max_blast_strength=max_blast_strength)
@@ -439,8 +440,14 @@ class ForwardModel(object):
                 has_new_explosions = True
 
         agent_positions = []
+        training_agent_pos = ()
+        idx = 0
         for num_agent, agent in enumerate(alive_agents):
-            agent_positions.append(agent.position)
+            if agent.agent_id == 0: 
+                training_agent_pos = agent.position
+                idx = num_agent
+            else: agent_positions.append(agent.position)
+
 
         # Chain the explosions.
         while has_new_explosions:
@@ -461,13 +468,16 @@ class ForwardModel(object):
                         if curr_board[r][c] == constants.Item.Rigid.value:
                             break
                         exploded_map[r][c] = 1
+    
+                        # Trainable Agent ID == 0
+                        if bomb.bomber.agent_id == 0: 
+                            # If our bomb kills another agent
+                            if (r,c) in agent_positions: alive_agents[idx].reward +=  0.25 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
+                            # If we are about to die
+                            if (r,c) == training_agent_pos: alive_agents[idx].reward -= 0.025
 
-                        # Need better way to store bomb and detect training agent
-                        # if (r,c) in agent_positions:
-                            # bomb.reward += 0.75 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
                         if curr_board[r][c] == constants.Item.Wood.value:
-                            # Better way to store reward
-                            # bomb.reward += 0.75 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
+                            if bomb.bomber.agent_id == 0: alive_agents[idx].reward += 0.25 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
                             break
 
             curr_bombs = next_bombs
@@ -607,7 +617,7 @@ class ForwardModel(object):
                 if len(alive) != 1:
                     # Either we have more than 1 alive (reached max steps) or
                     # we have 0 alive (last agents died at the same time).
-                    return {
+                    return { 
                         'result': constants.Result.Tie,
                     }
                 else:
@@ -688,13 +698,21 @@ class ForwardModel(object):
                     if agents[i].__class__.__name__ == "TrainingAgent": 
                         trainable_agent = agents[i]
                         index = i
+                
+                # add explore reward for each step
+                rewards += trainable_agent.get_position_reward()
+
+                if trainable_agent.reward != 0: 
+                    # print("TReward", trainable_agent.reward)
+                    rewards += trainable_agent.reward
+                    trainable_agent.reward = 0
+
                 if bombs:
                     neg_positions = get_dangerzone(bombs)
-                    if safety_check(neg_positions, trainable_agent.position): rewards += 0.025
+                    if safety_check(neg_positions, trainable_agent.position): rewards += 0.005
                     else: rewards -= 0.025
                     for bomb in bombs:
-                        if bomb.bomber.agent_id == trainable_agent.agent_id: 
-                            rewards += 0.025 
+                        if bomb.bomber.agent_id == trainable_agent.agent_id and bomb.life == 9: rewards += 0.0025 
 
                 tmp = [int(agent.is_alive) - 1 for agent in agents]
                 tmp[index] += rewards
