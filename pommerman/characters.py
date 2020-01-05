@@ -26,7 +26,7 @@ class Bomber(object):
             self.visited.add(cell)
             return 0.002
 
-        return 0.08 * (len(self.visited )/ 121)
+        return 0.008 * (len(self.visited)/ 121)
 
 
     def set_agent_id(self, agent_id):

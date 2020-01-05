@@ -472,12 +472,12 @@ class ForwardModel(object):
                         # Trainable Agent ID == 0
                         if bomb.bomber.agent_id == 0: 
                             # If our bomb kills another agent
-                            if (r,c) in agent_positions: alive_agents[idx].reward +=  0.25 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
+                            if (r,c) in agent_positions: alive_agents[idx].reward += 0.025 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
                             # If we are about to die
                             if (r,c) == training_agent_pos: alive_agents[idx].reward -= 0.025
 
                         if curr_board[r][c] == constants.Item.Wood.value:
-                            if bomb.bomber.agent_id == 0: alive_agents[idx].reward += 0.25 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
+                            if bomb.bomber.agent_id == 0: alive_agents[idx].reward += 0.025 / (abs(r - pos[0]) + abs(c - pos[1]) + 1)
                             break
 
             curr_bombs = next_bombs
@@ -709,10 +709,10 @@ class ForwardModel(object):
 
                 if bombs:
                     neg_positions = get_dangerzone(bombs)
-                    if safety_check(neg_positions, trainable_agent.position): rewards += 0.005
-                    else: rewards -= 0.025
+                    if safety_check(neg_positions, trainable_agent.position): rewards += 0.0015
+                    else: rewards -= 0.0025
                     for bomb in bombs:
-                        if bomb.bomber.agent_id == trainable_agent.agent_id and bomb.life == 9: rewards += 0.0025 
+                        if bomb.bomber.agent_id == trainable_agent.agent_id and bomb.life == 9: rewards += 0.025
 
                 tmp = [int(agent.is_alive) - 1 for agent in agents]
                 tmp[index] += rewards
